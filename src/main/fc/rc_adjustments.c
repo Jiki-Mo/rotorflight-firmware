@@ -205,7 +205,6 @@ static const adjustmentConfig_t adjustmentConfigs[ADJUSTMENT_FUNCTION_COUNT] =
 
     ADJ_ENTRY(ANGLE_LEVEL_GAIN,             0, 200),
     ADJ_ENTRY(HORIZON_LEVEL_GAIN,           0, 200),
-    ADJ_ENTRY(ACRO_TRAINER_GAIN,            25, 255),
 
     ADJ_ENTRY(RESCUE_CLIMB_COLLECTIVE,      0, 1000),
     ADJ_ENTRY(RESCUE_HOVER_COLLECTIVE,      0, 1000),
@@ -220,13 +219,21 @@ static const adjustmentConfig_t adjustmentConfigs[ADJUSTMENT_FUNCTION_COUNT] =
     ADJ_ENTRY(GOV_D_GAIN,                   0, 250),
     ADJ_ENTRY(GOV_F_GAIN,                   0, 250),
     ADJ_ENTRY(GOV_TTA_GAIN,                 0, 250),
+    ADJ_ENTRY(GOV_YAW_FF,                   0, 250),
     ADJ_ENTRY(GOV_CYCLIC_FF,                0, 250),
     ADJ_ENTRY(GOV_COLLECTIVE_FF,            0, 250),
     ADJ_ENTRY(GOV_IDLE_THROTTLE,            0, 250),
     ADJ_ENTRY(GOV_AUTO_THROTTLE,            0, 250),
+    ADJ_ENTRY(GOV_MAX_THROTTLE,             0, 100),
+    ADJ_ENTRY(GOV_MIN_THROTTLE,             0, 100),
+    ADJ_ENTRY(GOV_HEADSPEED,                0, 50000),
 
     ADJ_ENTRY(ACC_TRIM_PITCH,               -300, 300),
     ADJ_ENTRY(ACC_TRIM_ROLL,                -300, 300),
+
+#ifdef USE_ACRO_TRAINER
+    ADJ_ENTRY(ACRO_TRAINER_GAIN,            25, 255),
+#endif
 };
 
 
@@ -332,22 +339,24 @@ void processRcAdjustments(void)
 
                 if (adjval != adjState->adjValue) {
                     adjConfig->cfgSet(adjval);
+                    adjval = adjConfig->cfgGet();
 
-                    updateAdjustmentData(adjFunc, adjval);
-                    blackboxAdjustmentEvent(adjFunc, adjval);
+                    if (adjval != adjState->adjValue) {
+                        updateAdjustmentData(adjFunc, adjval);
+                        blackboxAdjustmentEvent(adjFunc, adjval);
 
-                    // PID profile change does it's own confirmation, no of beeps eq profile no,
-                    // a single beep here will kill that.
-                    if (adjFunc != ADJUSTMENT_PID_PROFILE) {
-                      beeperConfirmationBeeps(1);
+                        // PID profile change does it's own confirmation, no of beeps eq profile no,
+                        // a single beep here will kill that.
+                        if (adjFunc != ADJUSTMENT_PID_PROFILE)
+                            beeperConfirmationBeeps(1);
+
+                        setConfigDirty();
+
+                        adjState->deadTime = now + REPEAT_DELAY;
+                        adjState->adjValue = adjval;
+
+                        changed = true;
                     }
-
-                    setConfigDirty();
-
-                    adjState->deadTime = now + REPEAT_DELAY;
-                    adjState->adjValue = adjval;
-
-                    changed = true;
                 }
             }
         }
